@@ -31,6 +31,10 @@
 // - The third model, sections, contains the following fields: courseId, lecturerId
 // - The fourth model, reviews, contains the following fields, sectionId, body, rating
 
+
+//IMPORTANT NOTE: My Firebase databse has two classes: KIEI-451 and a dumby class called "classclass". KIEI-451 has three lectureres, six sections (two sections per lecturer), and nine reviews.  The dumby class has one section, one lecturer, and one review which I used for testing. Therefore the only inputs into the URL can be  courseNumber=KIEI-451 or courseNumber=classclass. No instruction was given on the order and styling of the output so it is left as is. 
+
+
 // allows us to use firebase
 let firebase = require(`./firebase`)
 
@@ -62,13 +66,18 @@ exports.handler = async function(event) {
   }
 
   // set a new Array as part of the return value
+  returnValue.courseReviewCount = 0
+  returnValue.courseAverageReviewRating = 0
   returnValue.sections = []
+  returnValue.sections.sectionRatingAverage = 0
+  returnValue.sections.reviews = []
 
   // ask Firebase for the sections corresponding to the Document ID of the course, wait for the response
   let sectionsQuery = await db.collection('sections').where(`courseId`, `==`, courseId).get()
 
   // get the documents from the query
   let sections = sectionsQuery.docs
+  let rating = 0
 
   // loop through the documents
   for (let i=0; i < sections.length; i++) {
@@ -94,11 +103,54 @@ exports.handler = async function(event) {
     returnValue.sections.push(sectionObject)
 
     // 🔥 your code for the reviews/ratings goes here
+
+    // ask Firebase for the review with the ID provided by the section; 
+    let reviewQuery = await db.collection('reviews').where(`sectionId`, `==`, sectionId).get()
+
+    // get the documents from the query
+    let reviews = reviewQuery.docs
+    let sectionRating = 0
+    //loop thorugh the reviews documents 
+    for (let j=0; j < reviews.length; j++){
+      // get the data from the review
+      let reviewData = reviews[j].data()
+      
+      // create an Object to be added to the return value of our lambda
+      let reviewObject = {}
+      
+      //update global rating total
+      rating += reviewData.rating
+
+      //update section rating total
+      sectionRating += reviewData.rating
+
+      //add 1 review to our review counter
+      returnValue.courseReviewCount++
+
+      //add the review body text to the review object
+      reviewObject.reviewBody = reviewData.body
+
+      //add the review rating to the review object
+      reviewObject.reviewRating = reviewData.rating
+
+      //update section rating average
+      sectionObject.sectionRatingAverage = sectionRating/(j+1)
+
+      //update the section object with how many reviews exist for that section
+      sectionObject.sectionReviewCount = j+1
+
+      // add the review Object to the relevant section in the return value
+      returnValue.sections.push(reviewObject)
+    
   }
+  //set course average rating using the global rating total value over the total number of reviews
+  returnValue.courseAverageReviewRating = rating/returnValue.courseReviewCount
+  }
+  
 
   // return the standard response
   return {
     statusCode: 200,
     body: JSON.stringify(returnValue)
   }
-}
+  }
